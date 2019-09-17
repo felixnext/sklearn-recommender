@@ -34,6 +34,6 @@ setup(name='sklearn-recommender',
       author='Felix Geilert',
       license='MIT License',
       packages=find_packages(),
-      install_requires=[ 'numpy', 'sklearn', 'scipy', 'pandas' ],
+      install_requires=[ 'numpy', 'sklearn', 'scipy', 'pandas', 'nltk' ],
       include_package_data=True,
       zip_safe=False)
