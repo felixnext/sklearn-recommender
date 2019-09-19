@@ -1,14 +1,20 @@
 # Sklearn Recommender
 
-This library implements some common recommender functions.
+This library implements some common recommender functions based on the `Estimator` and `Transformer` interfaces from sklearn.
 
 ## Getting Started
 
+Install it through PyPi through:
+
+
+`pip install sklearn-recommender`
+
+
 Install the library on your local distribution through:
+
 
 `pip install .`
 
-(pypi to follow).
 
 ## Tutorial
 
@@ -23,7 +29,7 @@ import sklearn_recommender as skr
 
 **User-Item**
 
-Uses a list of user-item interactions to create a user-item matrix that can also be used as input to the similarity transformer. This also supports binary interactions by setting the `binarize` flag in the constructur.
+Uses a list of user-item interactions to create a user-item matrix that can also be used as input to the similarity transformer. This also supports binary interactions by setting the `binarize` flag in the constructor.
 
 ```python
 tf = skr.transformer.UserItemTransformer(user_col='user_id', item_col='item_id', value_col='ranking', agg_fct='mean')
@@ -82,11 +88,11 @@ rec.predict([10, 12])
 
 ### Helper Functions
 
-Apart from the sklearn extensions, there are also various
+Apart from the sklearn extensions, there are also various helper functions that help to prepare data for the training or reasoning process.
 
 **Train-Test Split:**
 
-Train-Test split for
+Train-Test split for user-item interactions.
 
 ```python
 df = ...
@@ -98,9 +104,14 @@ train_df, test_df = skr.train_test_split(df, split_size=0.3)
 
 In combination with text embeddings, there are some functions to tokenize input words using functions from `nltk`.
 
+```python
+tokens = skr.nlp.tokenize_clean('Just a simple sample text.')
+```
+
 ## Design Philosophy
 
-TODO
+The library is build on top of the sklearn interfaces to allow easy chaining of pipelines and expects pandas dataframes as inputs.
+The general goal is to allow the quick and easy exploration of data relevant to recommender systems as well as the quick building of a baseline recommender.
 
 ## Future Work
 
