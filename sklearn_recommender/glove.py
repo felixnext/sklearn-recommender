@@ -11,6 +11,7 @@ import urllib.request
 from zipfile import ZipFile
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.cluster import KMeans
+from sklearn.preprocessing import normalize
 
 # TODO: store in user home dir
 folder = os.path.dirname(os.path.realpath(__file__))
@@ -81,11 +82,17 @@ class GloveEmbeddings:
     embeddings_index = list(filter(lambda x: len(x[1]) == dim, embeddings_index))
     return dict(embeddings_index)
 
-  def word_vector(self, word):
+  def word_vector(self, word, normalize=True):
     '''Tries to retrieve the embedding for the given word, otherwise returns random vector.'''
     # generate randomness otherwise
     vec = self.emb.get(word)
-    return vec if vec is not None else np.random.normal(self.emb_mean, self.emb_std, (self.emb_size))
+    vec = vec if vec is not None else np.random.normal(self.emb_mean, self.emb_std, (self.emb_size))
+    # check for normalization
+    if normalize:
+      norm = np.linalg.norm(vec)
+      if norm != 0:
+        vec = np.divide(vec, norm)
+    return vec
 
   def sent_vector(self, sent, use_rand=True):
     '''Generates a single embedding vector.
@@ -109,11 +116,15 @@ class GloveEmbeddings:
         else:
           vec += wvec
       vec_count += 1
+
+    # select the vector
+    vec = vec if vec is not None else np.random.normal(self.emb_mean, self.emb_std, (self.emb_size))
     # normalize the vector
-    if vec is not None and vec_count > 0:
-      vec = vec / vec_count
+    norm = np.linalg.norm(vec)
+    if norm != 0:
+      vec = np.divide(vec, norm)
     # if no word is found return random vector
-    return vec if vec is not None else np.random.normal(self.emb_mean, self.emb_std, (self.emb_size))
+    return vec
 
   def sent_matrix(self, sent, max_feat, pad, dedub=False):
     '''Generates a Matrix of single embeddings for the item.
