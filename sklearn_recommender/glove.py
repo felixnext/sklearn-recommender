@@ -4,7 +4,7 @@ Code Inspiration from:
 https://www.kaggle.com/jhoward/improved-lstm-baseline-glove-dropout
 '''
 
-import os
+import os, warnings
 import numpy as np
 import pandas as pd
 import urllib.request
@@ -86,7 +86,10 @@ class GloveEmbeddings:
     '''Tries to retrieve the embedding for the given word, otherwise returns random vector.'''
     # generate randomness otherwise
     vec = self.emb.get(word)
-    vec = vec if vec is not None else np.random.normal(self.emb_mean, self.emb_std, (self.emb_size))
+    if vec is None:
+      vec = np.random.normal(self.emb_mean, self.emb_std, (self.emb_size))
+    else:
+      vec = np.copy(vec)
     # check for normalization
     if normalize:
       norm = np.linalg.norm(vec)
@@ -105,20 +108,21 @@ class GloveEmbeddings:
       Single normalized Vector to be used as embedding
     '''
     vec = None
-    vec_count = 0
     for word in sent:
       wvec = self.emb.get(word)
       if wvec is None and use_rand:
         wvec = np.random.normal(self.emb_mean, self.emb_std, (self.emb_size))
-      if wvec is not None:
+      if wvec is not None and len(wvec) > 0:
+        wvec = np.copy(wvec)
         if vec is None:
           vec = wvec
         else:
           vec += wvec
-      vec_count += 1
 
     # select the vector
-    vec = vec if vec is not None else np.random.normal(self.emb_mean, self.emb_std, (self.emb_size))
+    if vec is None:
+      warnings.warn('No word vector was found for combination: {} - using random vector (to silence this warning activate `use_rand`)'.format(str(sent)))
+      vec = np.random.normal(self.emb_mean, self.emb_std, (self.emb_size))
     # normalize the vector
     norm = np.linalg.norm(vec)
     if norm != 0:
@@ -145,10 +149,13 @@ class GloveEmbeddings:
     nb_words = min(max_feat, len(sent))
     embedding_matrix = np.random.normal(self.emb_mean, self.emb_std, (nb_words, self.emb_size))
     # iterate through all words
-    for i, word in enumerate(sent):
+    i = 0
+    for word in sent:
       if i >= max_feat: continue
       vec = self.emb.get(word)
-      if vec is not None: embedding_matrix[i] = vec
+      if vec is not None:
+        embedding_matrix[i] = np.copy(vec)
+        i += 1
     # pad the matrix to max features
     if pad and nb_words < max_feat:
       embedding_matrix = np.pad(embedding_matrix, (max_feat, self.emb_size), 'constant', constant_values=[0])
@@ -168,10 +175,11 @@ class GloveEmbeddings:
     vecs = []
     for word in set(sent):
       vec = self.emb.get(word)
-      if vec is not None: vecs.append(vec)
+      if vec is not None: vecs.append(np.copy(vec))
 
     # return random vector if none found
     if len(vecs) < max_feat:
+      warnings.warn('Less than expected clusters found ({} to {}) - filling with random vectors'.format(len(vecs), max_feat))
       return np.array(vecs + [np.random.normal(self.emb_mean, self.emb_std, (self.emb_size)) for i in range(max_feat - len(vecs))])
     elif len(vecs) == max_feat:
       return np.array(vecs)
@@ -185,7 +193,7 @@ class GloveEmbeddings:
 class GloVeTransformer(BaseEstimator, TransformerMixin):
   '''Transformer for the GloVe Model.'''
 
-  def __init__(self, name, dim, type, tokenizer, max_feat=None):
+  def __init__(self, name, dim, type, tokenizer, max_feat=None, use_random=False):
     '''Create the Transformer.
 
     Note that the centroid option might be slow.
@@ -196,6 +204,7 @@ class GloVeTransformer(BaseEstimator, TransformerMixin):
       type (str): Type of the transformation (options are: ['word', 'sent', 'sent-matrix', 'centroid'])
       tokenizer (fct): Function to tokenize the input data
       max_feat (int): Number of maximal feature vectors used per input
+      use_random (bool): Defines if random fill should be used for unkown words
     '''
     # safty checks
     if type not in ['word', 'sent', 'sent-matrix', 'centroid']:
@@ -207,6 +216,7 @@ class GloVeTransformer(BaseEstimator, TransformerMixin):
     self.type = type
     self.tokenizer = tokenizer
     self.max_feat = max_feat
+    self.use_rand = use_random
 
   def fit(self, x, y=None):
     return self
@@ -218,12 +228,13 @@ class GloVeTransformer(BaseEstimator, TransformerMixin):
     if self.type == 'word':
       return np.concat([self.glove.word_vector(tok) for tok in tokens])
     elif self.type == 'sent':
-      return self.glove.sent_vector(tokens)
+      return self.glove.sent_vector(tokens, self.use_rand)
     elif self.type == 'sent-matrix':
       # note: use padding to avoid pipeline problems
       return self.glove.sent_matrix(tokens, self.max_feat, True).reshape([-1])
     elif self.type == 'centroid':
       return self.glove.centroid_vectors(tokens, self.max_feat).reshape([-1])
+    warnings.warn('Unkown type {} - `NaN` returned'.format(self.type))
     return np.nan
 
   def transform(self, X):
