@@ -13,10 +13,24 @@ from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.cluster import KMeans
 from sklearn.preprocessing import normalize
 
-# TODO: store in user home dir
-folder = os.path.dirname(os.path.realpath(__file__))
 
-def download(name):
+def file_path(cache_dir=None, create=False):
+  '''Generates the full file-path based on the given name.'''
+  # update the directory based on the current path
+  if cache_dir is None:
+    cache_dir = os.path.join(os.path.expanduser('~'), '.sklearn-recommender')
+  cache_path = os.path.expanduser(cache_dir)
+  # attempt to create directory
+  if create and not os.path.exists(cache_path):
+    os.makedirs(cache_path)
+  # check additional access rights
+  if not os.access(cache_path, os.W_OK):
+    warnings.warn("No access to default data dir: {} - using /tmp instead".format(cache_path))
+    cache_path = os.path.join('/tmp', '.sklearn-recommender')
+
+  return cache_path
+
+def download(name, cache_dir=None):
   '''Downloads the relevant dataset and extracts it.
 
   Args:
@@ -25,8 +39,10 @@ def download(name):
   Returns:
     True if successful, otherwise False
   '''
+  folder = file_path(cache_dir, create=True)
+  file = os.path.join(folder, '{}.zip'.format(name))
   # check if files exists
-  if os.path.isfile(os.path.join(folder, '{}.zip'.format(name))):
+  if os.path.isfile(file):
     print('File found, no download needed')
     return True
 
@@ -37,26 +53,26 @@ def download(name):
     url = 'http://nlp.stanford.edu/data/wordvecs/glove.840B.300d.zip'
   if url is not None:
     try:
-      urllib.request.urlretrieve(url, os.path.join(folder, '{}.zip'.format(name)))
+      urllib.request.urlretrieve(url, file)
     except:
-      print("download failed")
+      warnings.warn("download of {} data failed".format(name))
       return False
     try:
       # Create a ZipFile Object and load sample.zip in it
-      with ZipFile(os.path.join(folder, '{}.zip'.format(name)), 'r') as zipObj:
+      with ZipFile(file, 'r') as zipObj:
         # Extract all the contents of zip file in current directory
         zipObj.extractall(folder)
       return True
     except:
-      print("extraction failed")
+      warnings.warn("extraction of {} data failed".format(name))
       return False
   return False
 
 class GloveEmbeddings:
   '''Class to load embeddings model and generate it for words or sentences.'''
-  def __init__(self, name, dim=25):
+  def __init__(self, name, dim=25, cache_dir=None):
     # load data
-    self.emb = self.load_vectors(name, dim)
+    self.emb = self.load_vectors(name, dim, cache_dir)
     self.emb_size = dim
     # calculate items for randomization (explicit convert to list to avoid numpy warning)
     all_embs = np.stack(list(self.emb.values()))
@@ -66,16 +82,20 @@ class GloveEmbeddings:
     '''Helper Function to transform the given vector into a float array.'''
     return word, np.asarray(arr, dtype='float32')
 
-  def load_vectors(self, name, dim):
+  def load_vectors(self, name, dim, cache_dir=None):
     '''Load the given vector data.'''
     # retrieve file name
     file = None
     if name == 'twitter':
-      file = os.path.join(folder, 'glove.{}.27B.{}d.txt'.format(name, dim))
+      file = 'glove.{}.27B.{}d.txt'.format(name, dim)
     elif name == 'wikipedia':
-      file = os.path.join(folder, 'glove.840B.{}d.txt'.format(dim))
+      file = 'glove.840B.{}d.txt'.format(dim)
     else:
       raise ValueError('Unkown model type ({})'.format(name))
+    file = os.path.join(file_path(cache_dir), file)
+    # check if file exists
+    if not os.path.exists(file):
+      raise IOError("The given dimension is not available or the model is not downloaded ({})!".format(file))
     # load the embeddings
     with open(file, encoding='utf-8') as file:
       embeddings_index = [self.get_coefs(*o.strip().split()) for o in file]
@@ -193,7 +213,7 @@ class GloveEmbeddings:
 class GloVeTransformer(BaseEstimator, TransformerMixin):
   '''Transformer for the GloVe Model.'''
 
-  def __init__(self, name, dim, type, tokenizer, max_feat=None, use_random=False):
+  def __init__(self, name, dim, type, tokenizer, max_feat=None, use_random=False, cache_dir=None):
     '''Create the Transformer.
 
     Note that the centroid option might be slow.
@@ -205,6 +225,7 @@ class GloVeTransformer(BaseEstimator, TransformerMixin):
       tokenizer (fct): Function to tokenize the input data
       max_feat (int): Number of maximal feature vectors used per input
       use_random (bool): Defines if random fill should be used for unkown words
+      cache_dir (str): Directory to store embeddings (if previously donwloaded) (default: ~./sklearn-recommender)
     '''
     # safty checks
     if type not in ['word', 'sent', 'sent-matrix', 'centroid']:
@@ -212,7 +233,7 @@ class GloVeTransformer(BaseEstimator, TransformerMixin):
     if type in ['sent-matrix', 'centroid'] and max_feat is None:
       raise ValueError("Required value for max_feat for type ({})".format(type))
     # set values
-    self.glove = GloveEmbeddings(name, dim)
+    self.glove = GloveEmbeddings(name, dim, cache_dir=cache_dir)
     self.type = type
     self.tokenizer = tokenizer
     self.max_feat = max_feat

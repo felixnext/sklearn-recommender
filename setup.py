@@ -13,7 +13,7 @@ from setuptools import find_packages
 __status__      = "Package"
 __copyright__   = "Copyright 2019"
 __license__     = "MIT License"
-__version__     = "0.1.4"
+__version__     = "0.1.5"
 
 # 01101100 00110000 00110000 01110000
 __author__      = "Felix Geilert"
